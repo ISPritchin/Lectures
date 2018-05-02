@@ -30,7 +30,7 @@ car_data %>%
   else .
 }
 
-#Оператор %T>% - передаст дальше оператор слева
+#Оператор %T>% - передаст дальше операнд слева
 rnorm(200) %>%
   matrix(ncol = 2) %T>%
   plot %>% # plot usually does not return anything. 
