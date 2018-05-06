@@ -1,0 +1,561 @@
+---
+title: "Манипуляция над данными. Пакет dplyr"
+author: "Притчин Иван"
+date: '6 мая 2018 г '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Библиотека dplyr предназначена для преобразования данных
+Выполним подключение библиотек `dplyr`, `ggplot2`.
+```{r, include=FALSE}
+library(dplyr)
+library(ggplot2)
+```
+
+Дополнительная информация по пакету dplyr:
+```{r}
+# browseVignettes(package = "dplyr")
+```
+
+Основные датасеты, используемые в скрипте:
+```{r}
+str(airquality)
+summary(airquality)
+str(iris)
+summary(iris)
+```
+
+## Функции для работы с одной таблицей
+
+### Фукнции select, select_if, select_at, (select_all)
+
+#### select
+Функция `select` позволяет производить выбор столбцов таблицы. Не производит никакой фильтрации. Различные вариации функции позволяют делать выбор более гибким.
+```{r}
+# столбец Ozone
+airquality %>% select(Ozone) %>% head
+# стобцы Ozone и Wind
+airquality %>% select(Ozone, Wind) %>% head
+# все столбцы между Ozone и Wind
+airquality %>% select(Ozone:Wind) %>% head
+# все столбцы между Ozone и Wind, а осташиеся столбцы - после них.
+airquality %>% select(Ozone:Wind, everything()) %>% head   
+# все столбцы, кроме температуры
+airquality %>% select(-Temp) %>% head
+# все столбцы, кроме диапозона столбцов между Ozone и Wind
+airquality %>% select(-(Ozone:Wind)) %>% head            
+```
+
+`select` может взаимодействовать с рядом функций для удовлетворения ваших желаний:
+```{r}
+#Выбор по подстроке
+select(iris, contains(".")) %>% head
+#Выбор столбцов, имя которых начинается с строки
+select(iris, starts_with("Sepal")) %>% head
+#Выбор столбцов, имя которых заканчивается на строку
+select(iris, ends_with("Length")) %>% head 
+#Выбор по регулярному выражению
+select(iris, matches(".t.")) %>% head
+#Выбор столбцов x1, x2, x3, x4, x5
+select(iris, num_range("x", 1:5)) %>% head
+#Выбор из набора столбцов по имени
+select(iris, one_of(c("Species", "Genus"))) %>% head
+```
+
+Функции, указанные выше, могут сочетаться
+```{r}
+airquality %>% select(-starts_with("O"), -ends_with("d")) %>% head
+```
+
+####select_if
+Допустим, что существует необходимость выбора столцов, которая опирается не на имена столбцов, а на значения, некоторые логические условия. Классический пример - выбор всех столбцов, которые являются числовыми (или другого любого типа, который может быть определен предикатной функцией):
+```{r}
+iris %>% select_if(is.numeric) %>% head
+iris %>% select_if(is.factor) %>% head
+```
+
+Мы можем описывать и свои функции. Однако классическое применение описано выше
+```{r}
+iris %>% select_if(function(col) is.numeric(col) && mean(col) > 3.5) %>% head
+```
+
+Функции select_all и select_at были недавно добалены в пакет. Источников с хорошим применением пока не найдено.
+
+### Функции filter
+#### filter
+Функции `filter` позволяют производить отбор строк по определенным условиям. Первым аргументом функция принимает данные, а далее - все условия.
+```{r}
+airquality %>% filter(Wind > 10) %>% head
+airquality %>% filter(is.na(Ozone)) %>% head
+```
+
+Код описанный ниже вернём пустую таблицу:
+```{r}
+airquality %>% filter(Ozone > median(Ozone))
+```
+
+Вычислим медиану
+```{r}
+median(airquality$Ozone) # значение медианы - NA
+```
+
+`airquality$Ozone > m` Cравнение с NA даёт NA, что приводит к пустому набору данных, так как функция filter вернёт только те значения, для который условие истинно, а оно не истинно ни для какой строки.
+
+Разумным решением проблемы является использование аргумента `na.rm` для удаления пустых значений.
+```{r}
+airquality %>% filter(Ozone > median(Ozone, na.rm = TRUE)) %>% head
+``` 
+
+Особое внимание следуют уделить использованию логических условий.
+```{r}
+airquality %>% filter(Ozone < 5 || Ozone > 100) # Результат - датасет без значений
+```
+
+Причина - использование `||`. Оператор `||` возвращает значение `TRUE`, если любое из первых значений векторов является истинной. Операция `||` не является веторизованной. Аналогично и для `&&`.
+```{r}
+c(T, F, F) & F
+c(T, F, F) && F
+```
+
+Следующий код вернёт все значения. Функция `filter` вернёт все значения, так как примет на вход значение `TRUE` 
+```{r}
+airquality %>% filter(Ozone > 5 || Ozone < 100) %>% head
+```
+
+#### filter_if
+
+Функция `filter_if` работает аналогично `select_if`, только позволяет задавать условия для сортировки. Особого использования функция `filter_if` не находит. Смысл имеет использование предикатных функций: `all_vars` и `any_vars`.
+```{r}
+iris %>% filter_if(is.numeric, all_vars(. > 2)) %>% head
+iris %>% filter_if(is.numeric, any_vars(. > 2.0 & . < 2.3)) %>% head
+iris %>% filter_if(is.numeric, any_vars(between(., 2.0, 2.3))) %>% head
+```
+
+Функции `filter_all` и `filter_at` были недавно добалены в пакет. Источников с хорошим применением пока не найдено.
+
+### mutate, transmute
+
+Для добавления новых столбцов в таблицу используется фукнция `mutate`, для получения только новых столбцов - `transmute`. Аргументами функций являются имена новых столбцов, где после знака равно указывается выражение, по которому будет вычисляться новый столбец.
+```{r}
+mtcars %>% as_tibble() %>% mutate(
+  cyl2 = cyl * 2,
+  cyl4 = cyl2 * 2
+) %>% head
+
+mtcars %>% as_tibble() %>% transmute(
+  cyl2 = cyl * 2,
+  cyl4 = cyl2 * 2
+) %>% head
+```
+
+Для удаления столбца следует в аргументах для имени столбца указать `NULL`
+```{r}
+mtcars %>% as_tibble() %>% mutate(
+  cyl = NULL,
+  mpg = NULL
+) %>% head
+```
+
+Функцию удобно использовать для перевода значений между различными система величин
+```{r}
+mtcars %>%
+  mutate(displ_l = disp / 61.0237) %>% head
+```
+
+Функции `mutate_if` и `transmute_if` удобны для приведения типов:
+```{r}
+iris %>% as_tibble() %>% mutate_if(is.factor, as.character) %>% head
+iris %>% as_tibble() %>% mutate_if(is.double, as.integer) %>% head
+
+iris %>% as_tibble() %>% transmute_if(is.factor, as.character) %>% head
+iris %>% as_tibble() %>% transmute_if(is.double, as.integer) %>% head
+```
+
+Функция `mutate_at`
+```{r}
+iris %>% mutate_at(vars(matches("Sepal")), log) %>% head
+iris %>% mutate_at(.vars = "Species", as.character) %>% head
+```
+
+### arrange
+
+Для упорядочивания используется функция `arrangе`. Несмотря на наличие вариантов c `_all` `_if` их применение не кажется необходимым.
+```{r}
+arrange(mtcars, mpg) %>% head
+arrange(mtcars, desc(mpg)) %>% head
+arrange(mtcars, -mpg) %>% head
+```
+
+### group_by, ungroup, group_by_all, group_by_if, group_by_at 
+
+Часто возникает задача группировки переменных. Сама группировка не производит никаких действий. Оперирование данными начинается при примении `summarize`, filter и других функкий. В целом, функции показывают хорошее взаимодействие между собой.
+```{r}
+mtcars %>% 
+  group_by(cyl) %>%
+  summarise(
+    meanQsec = mean(qsec)
+  )
+```
+
+Например, комбинация с функцией `filter`. Оставит наблюдения из машин с макисмальным значением `disp` в соответствующей группе.
+```{r}
+mtcars %>% 
+  group_by(cyl) %>%
+  filter(disp == max(disp))
+```
+
+Если производится несколько группировок, то при примении `summarize` группы будут раскрываться справо налево. Узнать по каким значениям выполнена группировка - функция `group_vars`
+```{r}
+by_vs_am <- mtcars %>% group_by(vs, am)
+group_vars(by_vs_am)
+by_vs <- by_vs_am %>% summarise(n = n())
+group_vars(by_vs)
+by_vs %>% summarise(n = sum(n))
+```
+
+Значения столбца для группировки может быть вычислено на ходу:
+```{r}
+mtcars %>% group_by(vsam = vs + am) %>% summarise(n = n())
+```
+
+`group_by_if` и `group_by_all` работают по аналогии с `_all` и `_if` функциями.
+
+### summarise
+Функция summarise выполняет расчёты в группах. Работает с группой функций. Основными являются:  
+* Center: mean(), median()  
+* Spread: sd(), IQR(), mad()  
+* Range: min(), max(), quantile()  
+* Position: first(), last(), nth()  
+* Count: n(), n_distinct()  
+* Logical: any(), all() 
+
+Без группировки чем-то похожа на функцию `summary`
+```{r}
+mtcars %>%
+  summarise(mean = mean(disp), n = n())
+```
+
+Изначально разделяем наблюдения на группы по некоторому критерию. Далее подводим итоги в каждой группе:
+```{r}
+mtcars %>%
+  group_by(cyl) %>%
+  summarise(mean = mean(disp), n = n(), s = sum(disp))
+```
+
+Выполняем группировку и при помощи функции `summary_all` находим значение некой функции для всех столбцов
+```{r}
+iris %>%
+  group_by(Species) %>%
+  summarise_all(mean)
+```
+
+Можно вычислять столбцы, по которым идёт суммирование через `summarise_if`
+```{r}
+starwars %>% summarise_if(is.numeric, mean, na.rm = TRUE)
+starwars %>% summarise_if(is.numeric, .funs = mean, na.rm = TRUE)
+```
+
+```{r}
+by_species <- iris %>% group_by(Species)
+by_species %>% summarise_all(funs(min, max))
+by_species %>% summarise_all(c("min", "max"))
+starwars %>% summarise_at(vars(height:mass), mean, na.rm = TRUE) %>% head
+by_species %>% summarise_all(funs(med = median))
+by_species %>% summarise_all(funs(Q3 = quantile), probs = 0.75)
+```
+
+### rename, rename_all, rename_if
+
+Для переименования столбцов используется фукнция `rename`
+```{r}
+mtcars %>% rename(Разгон = qsec) %>% head
+mtcars %>% rename_if(is.numeric, toupper) %>% head
+iris %>% rename_all(toupper) %>% head
+```
+
+### sample_n()
+
+Функции `sample` - функции для взятия подвыборки. 
+```{r}
+sample_n(mtcars, 5)
+#replace = TRUE - выборка с повторениями.
+sample_n(mtcars, 50, replace = TRUE) %>% n_distinct()
+```
+
+Полезным бывает комбинация функции `group_by`, `sample_n`. В следующем примере - взять по 3 наблюдения из каждой группы.
+```{r}
+mtcars %>% group_by(cyl) %>% sample_n(3)
+```
+
+### pull
+
+Работает как и [[ для data.frame.
+```{r}
+mtcars %>% pull(mpg) # вернёт вектор из значений стобца mpg
+mtcars %>% pull(1)   # вернёт значение первого столбца
+mtcars %>% pull(-1)  # вернёт значение последнего столбца
+```
+
+### count
+Существует ряд распространенных операций по работе с данными. Одна из них - подсчёт значений в некоторой группе/группах, которые получены на основании одной пременной или совокупности переменных.
+```{r}
+mtcars %>% count(cyl)
+# Параметр sort определяет упорядоченность
+starwars %>% count(species, homeworld, sort = TRUE) %>% print
+starwars %>% count(species, homeworld) %>% filter(n > 3)
+```
+
+### ton_n
+Допустим, что у нас стоит следующая задача. Ранжировать данные по значению параметра и отобрать строки с наибольшим или наименьшим параметром. Решение можно оформить и через другие функции, однако, самый короткий путь - использование фукнции `top_n`
+```{r}
+df <- data.frame(x = c(10, 4, 1, 6, 3, 1, 1))
+df %>% top_n(2)
+df %>% top_n(-2)
+```
+Последний пример вернул три значения, так как нет способа однозначно отобрать два последних значения.
+
+Если нам нужно указать по какой переменной ранжировать - используем третий параметр функции.
+```{r}
+iris %>% group_by(Species) %>% top_n(2, Sepal.Length)
+```
+
+### distinct
+Получение уникальных записей
+
+### do
+
+## Функции для работы с парой таблиц
+
+### Объединение таблиц
+Для объединения строк и столбов используется фукнция `bind_rows` и `bind_cols`.
+
+#### Объединение строк
+При объединении строк нет ограничений на совпадение имён столцов. Если какого-либо столбца нет в ряде данных - он будет добавлен, а значения будут выставлены в NA.
+```{r}
+one <- tibble(a = 1:3, b = letters[1:3])
+two <- tibble(a = 10:12, c = letters[2:4])
+bind_rows(one, two)
+two %>% rename(b = c) %>% bind_rows(one, .)
+# Можно вкладывать любое количество списков с данными
+bind_rows(list(one, two))
+bind_rows(list(one, two), list(two, one))
+```
+
+Можно объединять и вектора, если имена позволяют.
+```{r}
+bind_rows(
+  c(a = 1, b = 2),
+  c(a = 3, b = 4)
+)
+```
+
+Интересно, что допускается и смешивание различных структур. Единственное требование - наличие имён, по которым произойдёт объединение.
+```{r}
+bind_rows(
+  c(a = 1, b = 2),
+  data_frame(a = 3:4, b = 5:6),
+  c(a = 7, b = 8)
+)
+```
+
+```{r}
+ll <- list(
+  a = c(A = 1, B = 2),
+  b = c(A = 3, B = 4)
+)
+bind_rows(ll)
+```
+
+Можно добавить столбец-идентификатор для идентификации таблицы, из которой пришла строка.
+```{r}
+one <- tibble(a = 1:3, b = letters[1:3])
+two <- tibble(a = 10:12, b = letters[2:4])
+bind_rows(one, two, .id = "id")
+```
+
+Слудеющие два варианта дадут одинаковый результат:
+```{r}
+bind_rows(a = one, b = two, .id = "ident")
+bind_rows("a" = one, "b" = two, .id = "ident")
+```
+
+#### Объединение столбцов
+
+Объединение столбцов накладывает ограничение на равенство числа строк в каждой из таблиц.
+```{r}
+one <- tibble(a = 1:3, b = letters[1:3])
+two <- tibble(a = 10:12, b = letters[2:4])
+bind_cols(one, two)
+# вернёт ошибку, так как количество строк неравное
+# sample_n(one, 2) %>% bind_cols(two)
+```
+
+### Операции над записями таблицы, как над множествами
+Исходные данные:
+```{r}
+a = tibble(a = 1:3)
+b = sample_n(a, 2)
+```
+
+Функция `intersect` - для пересечения множества, `union` - для объединения, `union_al` - для объединения с повторением, `setdiff` - разность между множествами (не явл. симм.).
+```{r}
+intersect(a, b)
+union(a, b)
+union_all(a, b)
+setdiff(a, bind_rows(b, tibble(a = 4)))
+```
+
+### Объединения таблиц по ключу (join)
+Исходные данные
+```{r}
+band_members
+band_instruments
+```
+
+`inner join` каждой записи из левой таблицы находит значение из правой таблицы, если значение найдено - результирующая строка попадёт в таблицу, иначе - будет рассматриваться другая строка.
+```{r}
+band_members %>% inner_join(band_instruments)
+band_members %>% inner_join(band_instruments, by = "name")
+```
+
+Механизм работы `left_join`: каждой записи из левой таблицы будет искаться запись из правой таблицы. Если запись из правой таблицы не найдена - в столбцах результирующей записи, которые составлены правой таблицей, будет поставно NA. Противоположность: `right_join`
+```{r}
+band_members %>% left_join(band_instruments)
+band_members %>% right_join(band_instruments)
+```
+
+Результатом работы `full_join` будет результат от работы `left_join` и `right_join`, сведённых в одну таблицу.
+```{r}
+band_members %>% full_join(band_instruments)
+band_members %>% full_join(band_instruments2, by = c("name" = "artist"))
+```
+
+Функция `semi_join` возвращает значения из первой таблицы, которым при `left_join` будет найдено соответствие, фукнция антипод - `anti-join`
+```{r}
+band_members %>% semi_join(band_instruments)
+band_members %>% anti_join(band_instruments)
+```
+
+### Сравнение таблиц
+Сравнение осуществляется функцией `all_equal`
+```{r}
+scramble <- function(x) x[sample(nrow(x)), sample(ncol(x))]
+all_equal(mtcars, scramble(mtcars))
+all_equal(mtcars, scramble(mtcars), ignore_col_order = FALSE)
+all_equal(mtcars, scramble(mtcars), ignore_row_order = FALSE)
+```
+
+## Фукнции для работы с векторами.
+
+#### between
+Для проверки принадлежности значения промежутку следует использовать функцию `between`. Не имеет никаких особых эффектов. Только если снижение числа ошикок и простота чтения кода.
+```{r}
+between(1, 1, 3)
+between(1, 2, 3)
+```
+
+#### case_when
+Функция `case_when` является векторизованный вариантом функции `if-else-if`. Единственное требование к функции - все возвращаемые значения должны быть одного типа, так как возвращается вектор.
+```{r}
+x <- 1:50
+case_when(
+  x %% 35 == 0 ~ "fizz buzz",
+  x %% 5 == 0 ~ "fizz",
+  x %% 7 == 0 ~ "buzz",
+  TRUE ~ as.character(x)
+)
+```
+
+Даже если возвращаемым значением является `NA` следует использовать специальные типы `NA_real_`, `NA_character_`, `NA_integer_`, `NA_complex_`:
+```{r}
+case_when(
+  x %% 35 == 0 ~ 35,
+  x %% 5 == 0 ~ 5,
+  x %% 7 == 0 ~ 7,
+  TRUE ~ NA_real_
+)
+```
+
+Данная функция может хорошо использоваться для создания новой факторной переменной
+```{r}
+starwars %>%
+  select(name:mass, gender, species) %>%
+  mutate(
+    type = case_when(
+      height > 200 | mass > 200 ~ "large",
+      species == "Droid"        ~ "robot",
+      TRUE                      ~  "other"
+    )
+  ) %>%
+  head
+```
+
+#### coalesce
+Пусть имеются два вектора. Допустим в первом векторе наличие значений `NA`. Функция `coalesce` заменяет все значения `NA` из первого вектора на значения из второго вектора, взятых из соответствующих позиций.
+```{r}
+x <- sample(c(1:5, NA, NA, NA))
+coalesce(x, 0L)
+```
+
+```{r}
+y <- c(1, 2, NA, NA, 5)
+z <- c(NA, NA, 3, 4, 5)
+coalesce(y, z)
+```
+
+#### cumall, cumany, cummean
+Кумулятивные варианты для `all`, `any` и `mean`
+
+#### desc
+Меняет порядок сортировки на противоположный. (правда, на самом деле, умножает значение веткора на -1).
+
+#### lead, lag
+Функция `lead` производит сдвиг вектора влево, фунция `lag` - сдвиг вправо. Функции очень позелны в формировании столбцов, где текущее значение основывается на следующем или предыдущем значении из другого столбца. Величина сдвига опрделяется вторым параметром. По умолчанию - сдвиг на одну позицию.
+```{r}
+lead(1:10)
+lag(1:10, 2)
+#О полезном применении
+x <- runif(5)
+cbind(ahead = lead(x), x, behind = lag(x))
+```
+#### order_by
+
+#### n 
+Функция, которая используется часто в `summarise` для подсчета числа наблюдений, 
+
+#### n_distinct
+Возвращает число уникльных наблюдений
+```{r}
+n_distinct(rnorm(100000))
+```
+
+#### na_if
+Сранивает значение двух аргументов. При совпадении значений возвращает `NA`.
+```{r}
+na_if(1:5, 5:1)
+x <- c(1, -1, 0, 10)
+100 / x
+100 / na_if(x, 0)
+```
+
+#### near
+Выполняет сравнение двух значений. Решает проблему со сравнением вещественных значений.
+```{r}
+sqrt(2) ^ 2 == 2
+near(sqrt(2) ^ 2, 2)
+```
+
+#### row_number, min_rank, dense_rank, percent_rank, cume_dist
+x <- c(5, 1, 3, 2, 2, NA)
+```{r}
+row_number(x)
+min_rank(x)
+dense_rank(x)
+percent_rank(x)
+cume_dist(x)
+```
+

@@ -1,0 +1,40 @@
+library(plotly)
+library(magrittr)
+
+plot_ly(y = ~rnorm(50), type = "box") %>%
+  add_trace(y = ~rnorm(50, 1))
+
+plot_ly(x = ~rnorm(50), type = "box") %>%
+  add_trace(x = ~rnorm(50, 1))
+
+plot_ly(y = ~rnorm(50), type = "box", boxpoints = "all", jitter = 0.3,
+       pointpos = -1.8)
+
+plot_ly(
+  y = ~rnorm(50), 
+  type = "box",
+  whiskerwidth = 0.5, #ширина усов, относительно ширины ящика [0..1]
+  boxpoints = "all", #"all" | "outliers" | "suspectedoutliers" | FALSE
+  boxmean = "sd", #"TRUE | sd | FALSE".
+  jitter = 0.3, #[0..1] - ширина разброса
+  pointpos = 0, #[-2..2] - центр разброса, 0 - центр, -+1 - левая, правая стенка бокса
+  orientation = "v",
+  marker = list(
+    symbol = "triangle",
+    opacity = 0.5,
+    size = 7, #default= 6
+    color = "white",
+    line = list(
+      width = 1,
+      color = "black",
+      outliercolor = "red",
+      outlierwidth = 10
+    )
+  ),
+  fillcolor = "white",
+  line = list(
+    color = "black",
+    width = 3 # #2 - по умолчанию
+  )
+) %>%
+  add_trace(y = ~rnorm(50, mean = 1, sd = 2))
